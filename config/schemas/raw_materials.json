@@ -1,0 +1,15 @@
+{
+  "type": "struct",
+  "fields": [
+    {"name": "material_id",     "type": "string",    "nullable": false},
+    {"name": "material_name",   "type": "string",    "nullable": false},
+    {"name": "category",        "type": "string",    "nullable": true},
+    {"name": "unit_of_measure", "type": "string",    "nullable": true},
+    {"name": "unit_price",      "type": "double",    "nullable": true},
+    {"name": "supplier_id",     "type": "string",    "nullable": false},
+    {"name": "lead_time_days",  "type": "integer",   "nullable": true},
+    {"name": "min_order_qty",   "type": "integer",   "nullable": true},
+    {"name": "year",            "type": "integer",   "nullable": false},
+    {"name": "month",           "type": "integer",   "nullable": false}
+  ]
+}

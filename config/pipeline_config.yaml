@@ -1,0 +1,148 @@
+# ============================================================
+# ETL Pipeline Configuration
+# ============================================================
+# All sensitive values should be overridden via environment
+# variables or AWS Secrets Manager in production.
+# ============================================================
+
+pipeline:
+  name: "etl_pg_s3_to_snowflake"
+  environment: "dev"                    # dev | staging | prod
+  log_level: "INFO"                     # DEBUG | INFO | WARNING | ERROR
+  retry_max_attempts: 3
+  retry_backoff_seconds: 10
+
+# ---------- SOURCE: PostgreSQL ----------
+postgres:
+  host: "${PG_HOST:-localhost}"
+  port: ${PG_PORT:-5432}
+  database: "${PG_DATABASE:-analytics}"
+  schema: "public"
+  user: "${PG_USER:-etl_reader}"
+  password: "${PG_PASSWORD}"            # always supply via env var
+  tables:
+    - name: "customers"
+      primary_key: "customer_id"
+      incremental_column: "updated_at"  # null → full load
+      partition_column: "customer_id"
+      num_partitions: 10
+      fetch_size: 10000
+    - name: "orders"
+      primary_key: "order_id"
+      incremental_column: "order_date"
+      partition_column: "order_id"
+      num_partitions: 20
+      fetch_size: 10000
+    - name: "products"
+      primary_key: "product_id"
+      incremental_column: null
+      partition_column: "product_id"
+      num_partitions: 4
+      fetch_size: 5000
+    - name: "suppliers"
+      primary_key: "supplier_id"
+      incremental_column: "updated_at"
+      partition_column: "supplier_id"
+      num_partitions: 4
+      fetch_size: 5000
+    - name: "warehouses"
+      primary_key: "warehouse_id"
+      incremental_column: null
+      partition_column: "warehouse_id"
+      num_partitions: 2
+      fetch_size: 5000
+    - name: "purchase_orders"
+      primary_key: "po_id"
+      incremental_column: "order_date"
+      partition_column: "po_id"
+      num_partitions: 10
+      fetch_size: 10000
+
+# ---------- SOURCE: S3 ----------
+s3:
+  bucket: "${S3_BUCKET:-my-data-lake}"
+  region: "${AWS_REGION:-us-east-1}"
+  datasets:
+    - name: "inventory"
+      prefix: "raw/inventory/"
+      file_format: "parquet"            # parquet | csv | json
+      schema_path: "config/schemas/inventory.json"
+      partition_keys:
+        - "year"
+        - "month"
+    - name: "raw_materials"
+      prefix: "raw/materials/"
+      file_format: "parquet"
+      schema_path: "config/schemas/raw_materials.json"
+      partition_keys:
+        - "year"
+        - "month"
+    - name: "product_reviews"
+      prefix: "raw/reviews/"
+      file_format: "json"
+      schema_path: "config/schemas/product_reviews.json"
+      partition_keys:
+        - "year"
+        - "month"
+
+# ---------- TRANSFORMATIONS (EMR / PySpark) ----------
+spark:
+  app_name: "etl_transform_job"
+  master: "yarn"                        # yarn | local[*]
+  deploy_mode: "cluster"                # cluster | client
+  config:
+    spark.sql.shuffle.partitions: "200"
+    spark.sql.adaptive.enabled: "true"
+    spark.sql.adaptive.coalescePartitions.enabled: "true"
+    spark.serializer: "org.apache.spark.serializer.KryoSerializer"
+    spark.dynamicAllocation.enabled: "true"
+    spark.dynamicAllocation.minExecutors: "2"
+    spark.dynamicAllocation.maxExecutors: "20"
+    spark.jars.packages: "net.snowflake:spark-snowflake_2.12:2.16.0-spark_3.4,net.snowflake:snowflake-jdbc:3.16.1,org.postgresql:postgresql:42.7.3"
+  staging_path: "s3a://${S3_BUCKET:-my-data-lake}/staging/transforms/"
+
+# ---------- DESTINATION: Snowflake ----------
+snowflake:
+  account: "${SF_ACCOUNT}"
+  user: "${SF_USER}"
+  password: "${SF_PASSWORD}"
+  role: "${SF_ROLE:-ETL_ROLE}"
+  warehouse: "${SF_WAREHOUSE:-ETL_WH}"
+  database: "${SF_DATABASE:-ANALYTICS}"
+  schema: "${SF_SCHEMA:-PUBLIC}"
+  write_mode: "overwrite"               # overwrite | append | merge
+  staging_area: "s3a://${S3_BUCKET:-my-data-lake}/staging/snowflake/"
+  tables:
+    - source: "customer_360"
+      target: "DIM_CUSTOMER_360"
+      write_mode: "merge"
+      merge_keys:
+        - "customer_id"
+    - source: "order_enriched"
+      target: "FACT_ORDERS_ENRICHED"
+      write_mode: "append"
+    - source: "inventory_snapshot"
+      target: "FACT_INVENTORY_SNAPSHOT"
+      write_mode: "overwrite"
+    - source: "material_consumption"
+      target: "FACT_MATERIAL_CONSUMPTION"
+      write_mode: "append"
+    - source: "supplier_performance"
+      target: "DIM_SUPPLIER_PERFORMANCE"
+      write_mode: "merge"
+      merge_keys:
+        - "supplier_id"
+
+# ---------- EMR Cluster (used by bootstrap / submit scripts) ----------
+emr:
+  cluster_name: "etl-pipeline-cluster"
+  release_label: "emr-7.1.0"
+  region: "${AWS_REGION:-us-east-1}"
+  master_instance_type: "m5.xlarge"
+  core_instance_type: "m5.2xlarge"
+  core_instance_count: 3
+  log_uri: "s3://${S3_BUCKET:-my-data-lake}/emr-logs/"
+  ec2_key_name: "${EMR_KEY_PAIR}"
+  subnet_id: "${EMR_SUBNET_ID}"
+  bootstrap_actions: []
+  step_concurrency: 1

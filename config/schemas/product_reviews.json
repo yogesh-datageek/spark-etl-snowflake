@@ -1,0 +1,15 @@
+{
+  "type": "struct",
+  "fields": [
+    {"name": "review_id",   "type": "string",    "nullable": false},
+    {"name": "product_id",  "type": "string",    "nullable": false},
+    {"name": "user_id",     "type": "string",    "nullable": true},
+    {"name": "rating",      "type": "integer",   "nullable": false},
+    {"name": "review_text", "type": "string",    "nullable": true},
+    {"name": "helpful_votes","type": "integer",   "nullable": true},
+    {"name": "verified",    "type": "boolean",   "nullable": true},
+    {"name": "review_date", "type": "date",      "nullable": false},
+    {"name": "year",        "type": "integer",   "nullable": false},
+    {"name": "month",       "type": "integer",   "nullable": false}
+  ]
+}

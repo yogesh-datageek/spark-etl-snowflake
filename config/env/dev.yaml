@@ -1,0 +1,22 @@
+# ============================================================
+# Environment overrides — copy & rename per environment
+#   config/env/dev.yaml   |  staging.yaml  |  prod.yaml
+# ============================================================
+# Values here are merged ON TOP of pipeline_config.yaml.
+
+pipeline:
+  environment: "dev"
+  log_level: "DEBUG"
+
+spark:
+  master: "local[*]"
+  deploy_mode: "client"
+  config:
+    spark.sql.shuffle.partitions: "8"
+    spark.dynamicAllocation.enabled: "false"
+
+snowflake:
+  warehouse: "DEV_WH"
+  database: "DEV_ANALYTICS"
+  schema: "PUBLIC"
+  write_mode: "overwrite"
